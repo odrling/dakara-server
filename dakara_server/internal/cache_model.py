@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import partial
 
 from django.core.cache import cache
 from django.db import models
@@ -57,12 +58,12 @@ class CacheManager:
                     f"{field.remote_field.model.__name__}:Handle"
                 ),
             )
-            def handle(sender, **kwargs):
+            def handle(on_delete_func, sender, **kwargs):
                 instance = kwargs.get("instance")
-                on_delete(instance, self)
+                on_delete_func(instance, self)
 
             # store the handle
-            self._on_delete_funcs[field.name] = handle
+            self._on_delete_funcs[field.name] = partial(handle, on_delete)
 
     @contextmanager
     def _access_store(self):
@@ -233,7 +234,7 @@ class CacheModelBase(models.base.ModelBase):
         # create and connect cache manager
         manager = CacheManager()
         manager._connect(new_class)
-        setattr(new_class, "cache", manager)
+        new_class.cache = manager
 
         return new_class
 
@@ -279,7 +280,7 @@ class CacheOnDeleteMixin:
     """
 
     def __init__(self, to, on_delete, *args, **kwargs):
-        super().__init__(to, on_delete=models.DO_NOTHING, *args, **kwargs)
+        super().__init__(to, *args, on_delete=models.DO_NOTHING, **kwargs)
         self.cache_on_delete = on_delete
 
 
